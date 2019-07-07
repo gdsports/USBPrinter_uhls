@@ -288,9 +288,19 @@ uint32_t USBPrinter::RcvData(uint16_t *bytes_rcvd, uint8_t *dataptr) {
 }
 
 uint32_t USBPrinter::SndData(uint16_t nbytes, uint8_t *dataptr) {
-    uint32_t rv = pUsb->outTransfer(bAddress, epInfo[epDataOutIndex].epAddr, nbytes, dataptr);
-    if(rv && rv != USB_ERRORFLOW) {
-        Release();
+    size_t outlen;
+    uint32_t rv;
+    for (size_t i = 0; i < nbytes; i += outlen) {
+        outlen = min(64, nbytes - i);
+        rv = pUsb->outTransfer(bAddress, epInfo[epDataOutIndex].epAddr, outlen, dataptr);
+        if (rv) {
+            Serial.print("USBPrinter::SndData|outTransfer ");
+            Serial.println(rv);
+        }
+        if(rv && rv != USB_ERRORFLOW) {
+            Release();
+        }
+        dataptr += outlen;
     }
     return rv;
 }
@@ -371,24 +381,10 @@ size_t USBPrinter::readBytes(char *buffer, size_t length) {
 }
 
 size_t USBPrinter::write(const uint8_t *buffer, size_t size) {
-#if 0
-    size_t remaining = size;
-    while (remaining > 0) {
-        size_t chunkSize = min(64, remaining);
-        uint8_t rcode = SndData(chunkSize, (uint8_t *)buffer);
-        if (rcode) {
-            ErrorMessage<uint8_t>(PSTR("SndData"), rcode);
-            return 0;
-        }
-        remaining -= chunkSize;
-        buffer += chunkSize;
-    }
-#else
     uint8_t rcode = SndData(size, (uint8_t *)buffer);
     if (rcode) {
         ErrorMessage<uint8_t>(PSTR("SndData"), rcode);
         return 0;
     }
-#endif
     return size;
 }
